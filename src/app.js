@@ -14,6 +14,8 @@ import {MedusaVerletBridge} from "./medusaVerletBridge";
 import {Background} from "./background";
 import {Plankton} from "./plankton";
 import {Godrays} from "./godrays";
+// [AUDIO REACTIVITY] Módulo de análisis de frecuencias graves en tiempo real.
+import {AudioReactivity} from "./audioReactivity";
 
 class App {
     renderer = null;
@@ -47,6 +49,8 @@ class App {
         this.renderer = renderer;
         this.mouseWorldPosition = new THREE.Vector3();
         this.mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        // [AUDIO REACTIVITY] Instancia del analizador de bass.
+        this.audioReactivity = new AudioReactivity();
     }
 
     async init(progressCallback) {
@@ -134,6 +138,12 @@ class App {
         this.bloomPass.radius.value = 0.8;
         this.raycaster = new THREE.Raycaster();
         this.renderer.domElement.addEventListener("mousemove", (event) => { this.onMouseMove(event); });
+
+        // [AUDIO REACTIVITY] Registra el listener de primera interacción para solicitar
+        // el micrófono en cuanto el usuario haga click o toque la pantalla.
+        // No bloquea la carga — el permiso se pide de forma asíncrona.
+        this.audioReactivity.initOnInteraction();
+
         await progressCallback(1.0, 100);
     }
     
@@ -260,6 +270,11 @@ class App {
             await this.physics.update(delta, elapsed);
         }
         this.sortMedusae();
+
+        // [AUDIO REACTIVITY] Actualizar el análisis de bass y propagar la
+        // intensidad al uniform TSL compartido por todos los materiales de medusa.
+        this.audioReactivity.update();
+        Medusa.uniforms.bassIntensity.value = this.audioReactivity.bassIntensity;
 
         await this.postProcessing.renderAsync();
 

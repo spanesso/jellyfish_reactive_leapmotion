@@ -118,6 +118,16 @@ export class MedusaBellPattern {
             /*** inner glow **/
             MedusaBellPattern.emissiveness.addAssign(orange * vEmissive);
 
+            // [AUDIO REACTIVITY] ─────────────────────────────────────────────
+            // Cuando el bajo supera el umbral, el cuerpo de la medusa transiciona
+            // hacia un cian-azul bioluminiscente y emite un resplandor eléctrico.
+            // El uniform bassIntensity es 0.0 en silencio y 1.0 en el pico del bass.
+            const bassColor = vec3(0.15, 0.7, 1.0);          // Cian-azul oceánico
+            const bass = Medusa.uniforms.bassIntensity;
+            color.assign(mix(color, bassColor, bass));        // Mezcla del color base hacia azul
+            MedusaBellPattern.emissiveness.addAssign(bassColor.mul(bass).mul(3.0)); // Glow eléctrico
+            // ─────────────────────────────────────────────────────────────────
+
             return color;
         })();
 

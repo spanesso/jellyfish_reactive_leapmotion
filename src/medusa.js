@@ -191,6 +191,8 @@ export class Medusa {
         Medusa.uniforms.matrix = uniform(new THREE.Matrix4());
         Medusa.uniforms.phase = uniform(0);
         Medusa.uniforms.charge = uniform(0);
+        // [AUDIO REACTIVITY] Intensidad del bass (0.0–1.0), actualizada por AudioReactivity cada frame.
+        Medusa.uniforms.bassIntensity = uniform(0);
         MedusaBellPattern.createColorNode();
         MedusaBellGeometry.createMaterial(physics);
         MedusaTentacles.createMaterial(physics);

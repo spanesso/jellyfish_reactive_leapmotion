@@ -123,7 +123,8 @@ export class MedusaBellGeometry {
 
         material.mrtNode = mrt( {
             bloomIntensity: Fn(() => {
-                const glowIntensity = Background.getFog * (1.0 + Medusa.uniforms.charge * 2);
+                // [AUDIO REACTIVITY] El bass amplifica el brillo del bloom además del charge normal.
+                const glowIntensity = Background.getFog * (1.0 + Medusa.uniforms.charge * 2 + Medusa.uniforms.bassIntensity * 4);
                 const charge = Medusa.uniforms.charge;
                 return vec4(glowIntensity, charge, 0, 1);
             })()

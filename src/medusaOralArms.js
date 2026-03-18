@@ -86,18 +86,27 @@ export class MedusaOralArms {
             const color = vec3().toVar("fragmentColor");
             color.assign(mix(orange, white, value));
 
+            // [AUDIO REACTIVITY] Mezcla el color de los brazos hacia cian-azul cuando hay bass.
+            // Usa 0.7 de intensidad máxima para que sea más sutil que el cuerpo principal.
+            const bassColorArms = vec3(0.15, 0.7, 1.0);
+            const bassArms = Medusa.uniforms.bassIntensity;
+            color.assign(mix(color, bassColorArms, bassArms.mul(0.7)));
+
             return color;
         })();
 
         MedusaOralArms.material.emissiveNode = Fn(() => {
             const red = vec3(1,0.2,0.1);
-            const orange = vec3(1,0.5,0.1);
-            return red.mul(emissive.mul(0.5));
+            // [AUDIO REACTIVITY] Los brazos emiten un glow azul-cian sincronizado con el bajo.
+            const bassColorEmit = vec3(0.15, 0.7, 1.0);
+            const bassEmit = Medusa.uniforms.bassIntensity;
+            return red.mul(emissive.mul(0.5)).add(bassColorEmit.mul(bassEmit).mul(2.0));
         })();
 
         MedusaOralArms.material.mrtNode = mrt( {
             bloomIntensity: Fn(() => {
-                const glowIntensity = Background.getFog * (1.0 + Medusa.uniforms.charge * 2);
+                // [AUDIO REACTIVITY] El bass también intensifica el bloom de los brazos.
+                const glowIntensity = Background.getFog * (1.0 + Medusa.uniforms.charge * 2 + Medusa.uniforms.bassIntensity * 4);
                 const charge = Medusa.uniforms.charge;
                 return vec4(glowIntensity, charge, 0, 1);
             })()
