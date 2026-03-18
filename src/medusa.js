@@ -12,6 +12,7 @@ const targetQuaternion = new THREE.Quaternion();
 const upVector = new THREE.Vector3(0, 1, 0);
 
 export class Medusa {
+    type = 'jellyfish';
     renderer = null;
     physics = null;
     object = null;
@@ -82,6 +83,20 @@ export class Medusa {
     }
 
     async bake() { }
+
+    /**
+     * Polimorfismo para render ordering.
+     * Llamado desde sortMedusae() en app.js.
+     * @param {number} z - renderOrder de inicio
+     * @returns {number} - siguiente z disponible
+     */
+    setRenderOrder(z) {
+        this.bell.geometryInside.object.renderOrder = z++;
+        this.arms.object.renderOrder = z++;
+        this.tentacles.object.renderOrder = z++;
+        this.bell.geometryOutside.object.renderOrder = z++;
+        return z;
+    }
 
     setTarget(target) {
         if (this.isScattering || this.isCircling || !target) {

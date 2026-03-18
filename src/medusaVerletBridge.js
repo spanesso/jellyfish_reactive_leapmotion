@@ -55,7 +55,20 @@ export class MedusaVerletBridge {
         this.medusaePtr = [];
         let ptr = this.fixedNum;
         for (let i = 0; i < this.medusaCount; i++) {
-            const count = (i === this.medusaCount - 1 ? this.vertices.length : this.vertices.findIndex(v => !v.fixed && v.medusaId === i + 1)) - ptr;
+            let endPtr;
+            if (i === this.medusaCount - 1) {
+                endPtr = this.vertices.length;
+            } else {
+                // Busca el primer vértice no-fijo de la siguiente entidad que SÍ tenga vértices.
+                // Esto soporta entidades con 0 vértices Verlet (ej: Lionfish).
+                let nextIdx = -1;
+                for (let j = i + 1; j < this.medusaCount; j++) {
+                    nextIdx = this.vertices.findIndex(v => !v.fixed && v.medusaId === j);
+                    if (nextIdx !== -1) break;
+                }
+                endPtr = nextIdx === -1 ? this.vertices.length : nextIdx;
+            }
+            const count = endPtr - ptr;
             this.medusaePtr[i] = { ptr, count };
             ptr += count;
         }
@@ -135,6 +148,7 @@ export class MedusaVerletBridge {
     }
     async updateMedusaById(id) {
         const { ptr, count } = this.medusaePtr[id];
+        if (count === 0) return; // entidad sin vértices Verlet (ej: Lionfish)
         await this._updatePositions(ptr, count);
     }
 

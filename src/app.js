@@ -10,6 +10,8 @@ import { VerletPhysics } from "./physics/verletPhysics";
 import { VertexVisualizer } from "./physics/vertexVisualizer";
 import {SpringVisualizer} from "./physics/springVisualizer";
 import {Medusa} from "./medusa";
+import {Lionfish} from "./lionfish";
+import {AnimalFactory} from "./animalFactory";
 import {MedusaVerletBridge} from "./medusaVerletBridge";
 import {Background} from "./background";
 import {Plankton} from "./plankton";
@@ -29,8 +31,10 @@ class App {
     springVisualizer = null;
     frameNum = 0;
 
-    MAX_MEDUSAE = 30;
+    MAX_JELLYFISH = 22;
+    MAX_LIONFISH = 8;
     medusaPool = [];
+    lionfishPool = [];
 
     timeNearCursor = 0;
     SPAWN_THRESHOLD_SECONDS = 3.0;
@@ -84,13 +88,23 @@ class App {
         this.renderer.toneMappingExposure = 1.0;
         await progressCallback(0.4);
         await Medusa.initStatic(this.physics);
+        await Lionfish.initStatic();
         await progressCallback(0.5);
         this.bridge = new MedusaVerletBridge(this.physics);
-        for (let i = 0; i < this.MAX_MEDUSAE; i++) {
+        // Registrar PRIMERO todas las medusas para que sus IDs en el bridge
+        // sean contiguos y el bake de vértices Verlet funcione correctamente.
+        for (let i = 0; i < this.MAX_JELLYFISH; i++) {
             const medusa = new Medusa(this.renderer, this.physics, this.bridge);
             this.scene.add(medusa.object);
             this.physics.addObject(medusa);
             this.medusaPool.push(medusa);
+        }
+        // Registrar lionfish DESPUÉS — 0 vértices Verlet, el bridge lo maneja.
+        for (let i = 0; i < this.MAX_LIONFISH; i++) {
+            const lf = new Lionfish(this.renderer, this.physics, this.bridge);
+            this.scene.add(lf.object);
+            this.physics.addObject(lf);
+            this.lionfishPool.push(lf);
         }
         this.physics.addObject(this.bridge);
         await progressCallback(0.6);
@@ -103,6 +117,7 @@ class App {
                 medusa.deactivate();
             }
         });
+        this.lionfishPool.forEach(lf => lf.deactivate());
         this.vertexVisualizer = new VertexVisualizer(this.physics);
         this.springVisualizer = new SpringVisualizer(this.physics);
         this.scene.add(this.springVisualizer.object);
@@ -147,20 +162,24 @@ class App {
         await progressCallback(1.0, 100);
     }
     
-    activateNextMedusa(spawnPosition) {
-        for (const medusa of this.medusaPool) {
-            if (!medusa.isActive) {
-                medusa.activate(spawnPosition);
+    /**
+     * Activa la primera entidad inactiva del tipo indicado.
+     * @param {'jellyfish'|'lionfish'} type
+     * @param {THREE.Vector3} spawnPosition
+     */
+    activateNextEntity(type, spawnPosition) {
+        const pool = type === 'lionfish' ? this.lionfishPool : this.medusaPool;
+        for (const entity of pool) {
+            if (!entity.isActive) {
+                entity.activate(spawnPosition);
                 return;
             }
         }
     }
 
-    scatterAllActiveMedusae() {
-        this.medusaPool.forEach(medusa => {
-            if (medusa.isActive) {
-                medusa.scatter();
-            }
+    scatterAllActiveEntities() {
+        this.medusaPool.concat(this.lionfishPool).forEach(entity => {
+            if (entity.isActive) entity.scatter();
         });
     }
 
@@ -176,11 +195,9 @@ class App {
         // Comprobar si el cursor se ha movido de la última posición de spawn.
         if (!this.cursorHasMoved && this.mouseWorldPosition.distanceTo(this.lastSpawnPosition) > this.CURSOR_MOVE_THRESHOLD) {
             this.cursorHasMoved = true;
-            // Si se mueve, ordenar a todas las medusas que dejen de rodear y vuelvan a seguir.
-            this.medusaPool.forEach(medusa => {
-                if (medusa.isActive) {
-                    medusa.stopCircling();
-                }
+            // Si se mueve, ordenar a todas las entidades que dejen de rodear y vuelvan a seguir.
+            this.medusaPool.concat(this.lionfishPool).forEach(entity => {
+                if (entity.isActive) entity.stopCircling();
             });
         }
         /*CAMBIO*/
@@ -192,28 +209,25 @@ class App {
     }
     
     updateMouseInteractions() {
-        this.medusaPool.forEach(medusa => {
-            if (medusa.isActive) {
-                medusa.updatePointerInteraction(this.raycaster.ray);
-                medusa.setTarget(this.mouseWorldPosition);
+        this.medusaPool.concat(this.lionfishPool).forEach(entity => {
+            if (entity.isActive) {
+                entity.updatePointerInteraction(this.raycaster.ray);
+                entity.setTarget(this.mouseWorldPosition);
             }
         });
     }
 
     sortMedusae() {
-        // ... (sin cambios)
-        this.bridge.medusae.forEach(medusa => {
-           medusa.distance = medusa.isActive ? this.camera.position.distanceTo(medusa.transformationObject.position) : Infinity;
+        this.bridge.medusae.forEach(entity => {
+            entity.distance = entity.isActive
+                ? this.camera.position.distanceTo(entity.transformationObject.position)
+                : Infinity;
         });
-        const sorted = [...this.bridge.medusae].sort((m1,m2) => m1.distance - m2.distance);
+        const sorted = [...this.bridge.medusae].sort((a, b) => a.distance - b.distance);
         let z = 10;
-        for (let i = 0; i < sorted.length; i++) {
-            const m = sorted[i];
-            if (!m.isActive) continue;
-            m.bell.geometryInside.object.renderOrder = z++;
-            m.arms.object.renderOrder = z++;
-            m.tentacles.object.renderOrder = z++;
-            m.bell.geometryOutside.object.renderOrder = z++;
+        for (const entity of sorted) {
+            if (!entity.isActive) continue;
+            z = entity.setRenderOrder(z);
         }
     }
 
@@ -229,11 +243,12 @@ class App {
         this.lights.update(elapsed);
         this.updateMouseInteractions();
 
-        const activeMedusae = this.medusaPool.filter(m => m.isActive);
-        if (activeMedusae.length > 0 && activeMedusae.length < this.MAX_MEDUSAE) {
+        const activeEntities = this.medusaPool.concat(this.lionfishPool).filter(e => e.isActive);
+        const totalMax = this.MAX_JELLYFISH + this.MAX_LIONFISH;
+        if (activeEntities.length > 0 && activeEntities.length < totalMax) {
             const averagePosition = new THREE.Vector3();
-            activeMedusae.forEach(m => averagePosition.add(m.transformationObject.position));
-            averagePosition.divideScalar(activeMedusae.length);
+            activeEntities.forEach(e => averagePosition.add(e.transformationObject.position));
+            averagePosition.divideScalar(activeEntities.length);
             const dist = averagePosition.distanceTo(this.mouseWorldPosition);
 
             if (dist < this.NEARBY_DISTANCE) {
@@ -242,28 +257,26 @@ class App {
                 this.timeNearCursor = 0;
             }
 
-            /*CAMBIO*/
-            // Lógica de decisión principal: ¿crear o rodear?
             if (!this.isSpawning && this.timeNearCursor > this.SPAWN_THRESHOLD_SECONDS) {
                 if (this.cursorHasMoved) {
-                    // --- CASO 1: El cursor se ha movido -> Crear nueva medusa.
+                    // --- CASO 1: El cursor se ha movido -> Crear nueva entidad.
                     this.isSpawning = true;
                     this.timeNearCursor = 0;
 
-                    this.activateNextMedusa(averagePosition);
-                    this.scatterAllActiveMedusae();
+                    // AnimalFactory decide si la siguiente es medusa o lionfish.
+                    const nextType = AnimalFactory.getNextType();
+                    this.activateNextEntity(nextType, averagePosition);
+                    this.scatterAllActiveEntities();
 
-                    // Guardar la nueva posición y resetear el flag.
                     this.lastSpawnPosition.copy(this.mouseWorldPosition);
                     this.cursorHasMoved = false;
 
                     setTimeout(() => { this.isSpawning = false; }, 1000);
                 } else {
                     // --- CASO 2: El cursor NO se ha movido -> Iniciar circling.
-                    activeMedusae.forEach(m => m.startCircling(this.lastSpawnPosition));
+                    activeEntities.forEach(e => e.startCircling(this.lastSpawnPosition));
                 }
             }
-            /*CAMBIO*/
         }
 
         if (runSimulation) {
