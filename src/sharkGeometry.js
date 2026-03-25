@@ -2,7 +2,7 @@
 import * as THREE from "three/webgpu";
 import { Fn, vec4, float, mrt } from "three/tsl";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { SkeletonUtils } from "three/addons/utils/SkeletonUtils.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import sharkModelUrl from "./animals_3d/shark.glb?url";
 
 /**
@@ -37,8 +37,11 @@ export class SharkGeometry {
     // Los modelos GLB típicamente apuntan en -Z.  Rotamos π/2 en X para que
     // la cabeza apunte en +Y (eje de avance de Medusa/Lionfish).
     // Ajustar si el modelo específico requiere otra orientación.
+    // /CAMBIO/ Cola hacia adelante → añadir π en Y invierte la dirección cabeza/cola.
+    // El tiburón apuntaba en +Z con la cola al frente; al rotar π en Y queda la
+    // cabeza en +Y (eje de avance del sistema Medusa/Lionfish).
     static MODEL_ROTATION_X = Math.PI / 2;
-    static MODEL_ROTATION_Y = 0;
+    static MODEL_ROTATION_Y = Math.PI;
     static MODEL_ROTATION_Z = 0;
 
     /** Datos GLTF cargados una vez; compartidos entre todas las instancias. */
@@ -143,12 +146,17 @@ export class SharkGeometry {
                 // Añadir mrtNode solo si el material es un NodeMaterial
                 // (Three.js WebGPU con GLTFLoader usa MeshStandardNodeMaterial / MeshPhysicalNodeMaterial).
                 if (cloned.isNodeMaterial) {
+                    // /CAMBIO/ emissiveNode: el tiburón emite luz propia al detectar bass,
+                    // igual que las medusas. Sin esto el objeto no brilla visualmente.
+                    cloned.emissiveNode = Fn(() =>
+                        vec4(1.0, 0.95, 0.85, 1.0).rgb.mul(bassIntensityUniform).mul(float(3.0))
+                    )();
+
                     cloned.mrtNode = mrt({
-                        // bloomIntensity reactiva al bass: igual patrón que LionfishGeometry.
-                        // bassIntensityUniform es el uniform global actualizado cada frame.
+                        // bloomIntensity reactiva al bass: halo de bloom exterior
                         bloomIntensity: Fn(() =>
                             vec4(
-                                float(0.04).add(bassIntensityUniform.mul(float(0.40))),
+                                float(0.04).add(bassIntensityUniform.mul(float(3.0))),
                                 float(0.0),
                                 float(0.0),
                                 float(1.0)

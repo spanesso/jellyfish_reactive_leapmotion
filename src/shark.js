@@ -51,7 +51,8 @@ export class Shark extends Medusa {
     static TURN_SPEED = 0.30;   // factor slerp × delta (mayor inercia)
     static SWAY_FREQ  = 6.28;   // rad/seg (~1 Hz) oscilación lateral
     static SWAY_RATE  = 0.28;   // u/seg velocidad lateral pico (cuerpo grande)
-    static BASE_SCALE = 0.65;   // escala base del modelo en el acuario
+    // /CAMBIO/ Escala aumentada de 0.65 a 2.0
+    static BASE_SCALE = 2.0;    // escala base del modelo en el acuario
 
     constructor(renderer, physics, bridge) {
         super(renderer, physics, bridge);

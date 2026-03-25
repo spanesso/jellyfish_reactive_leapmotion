@@ -84,7 +84,8 @@ export class Lionfish extends Medusa {
         this.body.createGeometry();
         this.transformationObject.add(this.body.object);
         // Escala global: legible en el escenario, proporcional a las medusas
-        this.transformationObject.scale.set(0.72, 0.72, 0.72);
+        // /CAMBIO/ Escala aumentada de 0.72 a 1.4
+        this.transformationObject.scale.set(1.4, 1.4, 1.4);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

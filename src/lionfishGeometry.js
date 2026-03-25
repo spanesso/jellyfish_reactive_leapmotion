@@ -4,6 +4,8 @@ import {
     sin, mix, smoothstep,
     positionLocal, mrt
 } from "three/tsl";
+// /CAMBIO/ Importar Medusa para acceder al uniform bassIntensity compartido
+import { Medusa } from "./medusa";
 
 /**
  * LionfishGeometry
@@ -59,8 +61,18 @@ export class LionfishGeometry {
             return      mix(c2,     white,  smoothstep(0.68, 0.88, stripe));
         })();
 
+        // /CAMBIO/ emissiveNode: el cuerpo emite luz propia al detectar bass (igual que medusa)
+        matBody.emissiveNode = Fn(() =>
+            vec3(1.0, 0.95, 0.85).mul(Medusa.uniforms.bassIntensity).mul(float(3.0))
+        )();
+        // /CAMBIO/ bloomIntensity reactivo al bass: base 0.09 + hasta 3.0 extra en beats
         matBody.mrtNode = mrt({
-            bloomIntensity: Fn(() => vec4(float(0.09), float(0.0), float(0.0), float(1.0)))()
+            bloomIntensity: Fn(() =>
+                vec4(
+                    float(0.09).add(Medusa.uniforms.bassIntensity.mul(float(3.0))),
+                    float(0.0), float(0.0), float(1.0)
+                )
+            )()
         });
 
         // ── Aletas: semitransparente azul-grisáceo con rayas de rayos ────────
@@ -88,8 +100,18 @@ export class LionfishGeometry {
             return mix(c, dark, smoothstep(0.76, 0.90, spot));
         })();
 
+        // /CAMBIO/ emissiveNode: las aletas emiten luz propia en beats de bajo
+        matFin.emissiveNode = Fn(() =>
+            vec3(1.0, 0.95, 0.85).mul(Medusa.uniforms.bassIntensity).mul(float(2.5))
+        )();
+        // /CAMBIO/ bloomIntensity reactivo al bass: las aletas brillan en los beats
         matFin.mrtNode = mrt({
-            bloomIntensity: Fn(() => vec4(float(0.04), float(0.0), float(0.0), float(1.0)))()
+            bloomIntensity: Fn(() =>
+                vec4(
+                    float(0.04).add(Medusa.uniforms.bassIntensity.mul(float(2.5))),
+                    float(0.0), float(0.0), float(1.0)
+                )
+            )()
         });
 
         // ── Espinas: mismo que cuerpo pero ligeramente más oscuras ───────────
@@ -108,8 +130,18 @@ export class LionfishGeometry {
             return mix(red, cream, smoothstep(0.30, 0.70, band));
         })();
 
+        // /CAMBIO/ emissiveNode: las espinas emiten luz propia en beats de bajo
+        matSpine.emissiveNode = Fn(() =>
+            vec3(1.0, 0.95, 0.85).mul(Medusa.uniforms.bassIntensity).mul(float(3.0))
+        )();
+        // /CAMBIO/ bloomIntensity reactivo al bass: las espinas brillan en los beats
         matSpine.mrtNode = mrt({
-            bloomIntensity: Fn(() => vec4(float(0.06), float(0.0), float(0.0), float(1.0)))()
+            bloomIntensity: Fn(() =>
+                vec4(
+                    float(0.06).add(Medusa.uniforms.bassIntensity.mul(float(3.0))),
+                    float(0.0), float(0.0), float(1.0)
+                )
+            )()
         });
 
         // ── Ojo: negro satinado con highlight ────────────────────────────────
