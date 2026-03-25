@@ -1,10 +1,11 @@
+// /CAMBIO/ Nuevo archivo: entidad Tiburón que extiende Medusa.
 import * as THREE from "three/webgpu";
 import { Medusa } from "./medusa";
-import { LionfishGeometry } from "./lionfishGeometry";
+import { SharkGeometry } from "./sharkGeometry";
 import { noise2D } from "./common/noise";
 
 /**
- * Lionfish — Pez León
+ * Shark — Tiburón
  *
  * Hereda de Medusa para reutilizar sin modificar:
  *   - Ciclo de vida: activate() / deactivate()
@@ -14,62 +15,43 @@ import { noise2D } from "./common/noise";
  *   - Bridge Verlet: registra con 0 vértices → updateMedusaById no-op (count=0)
  *
  * Sobreescribe:
- *   - createBellGeometry() — geometría orgánica propia
- *   - update()             — movimiento tipo pez (nado real)
+ *   - createBellGeometry() — carga y usa el modelo GLB shark.glb
+ *   - update()             — movimiento tipo tiburón con animación GLB
  *   - setRenderOrder()     — render ordering propio
- *   - initStatic()         — materiales del lionfish
+ *   - initStatic()         — carga estática del modelo GLB (async)
+ *
+ * Audio reactivity:
+ *   - mixer.timeScale modulado por bassIntensity → nado más rápido en graves
+ *   - mrtNode en materiales con referencia al uniform bassIntensity → bloom reactivo
+ *   - Micro-pulso de escala en la geometría sincronizado con beats de bajo
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * MODELO DE MOVIMIENTO
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * update() se llama desde VerletPhysics.update() a 360 pasos/segundo.
- * Cada llamada: delta = 1/360 ≈ 0.00278 seg, elapsed = tiempo físico acumulado.
+ * Cada llamada: delta = 1/360 ≈ 0.00278 seg.
  *
- * 1. TIEMPO PROPIO (this.time):
- *    Crece ~1.0 por segundo real.
- *    time += delta * (1 + noiseVariation + charge)
+ * El movimiento replica el patrón de Lionfish._swimPosition() con constantes
+ * propias de tiburón:
+ *   - SWIM_SPEED:  menor (depredador lento y calculado)
+ *   - TURN_SPEED:  menor (mayor inercia por tamaño)
+ *   - SWAY_FREQ:   menor frecuencia (ondulación lenta del cuerpo)
+ *   - SWAY_RATE:   mayor amplitud (cuerpo más grande)
  *
- * 2. COLEO DE COLA (animación visual):
- *    tailWag = sin(time * TAIL_FREQ)
- *    TAIL_FREQ = 3Hz → 3*2π ≈ 18.85 rad/seg
- *    El pivot de la cola rota ±TAIL_AMP radianes.
- *
- * 3. ALETEO PECTORAL (animación visual):
- *    flutter = sin(time * 5.8) * 0.09
- *    Las aletas oscilan independientemente de la cola.
- *
- * 4. OSCILACIÓN CUERPO (efecto S-wave):
- *    bodyMesh.rotation.x = -tailWag * 0.07
- *    La cabeza se inclina opuesto a la cola.
- *
- * 5. ORIENTACIÓN SUAVE (dirección de nado):
- *    quaternion.slerp(targetQuat, delta * TURN_SPEED)
- *    TURN_SPEED = 0.45 < Medusa(0.8) → el pez gira con más inercia.
- *
- * 6. VELOCIDAD BASE CONSTANTE:
- *    speed = SWIM_SPEED * brakeFactor * delta + charge * 0.6 * delta
- *    No sinusoidal (al contrario de la medusa).
- *    brakeFactor = min(1, dist/2.5) → frena al acercarse al target.
- *
- * 7. OSCILACIÓN LATERAL DEL CUERPO (sway en posición):
- *    swayVelocity = sin(time * SWAY_FREQ) * SWAY_RATE * delta
- *    Se añade perpendicularmente al avance (cross(up, advance)).
- *    SWAY_FREQ = 2Hz → 2*2π ≈ 12.57 rad/seg
- *    SWAY_RATE = 0.22 u/seg (velocidad lateral pico)
- *
- * El eje de avance es +Y (igual que Medusa) para compatibilidad
+ * El eje de avance es +Y (igual que Medusa y Lionfish) para compatibilidad
  * con setFromUnitVectors y con el bridge Verlet.
  */
-export class Lionfish extends Medusa {
-    type = 'lionfish';
+export class Shark extends Medusa {
+
+    type = 'shark';
 
     // ── Constantes de movimiento ─────────────────────────────────────────────
-    static SWIM_SPEED  = 1.45;   // u/seg base (constante, no pulsante)
-    static TURN_SPEED  = 0.45;   // factor slerp × delta (< Medusa 0.8 → más inercia)
-    static SWAY_FREQ   = 12.57;  // rad/seg (~2 Hz)  oscilación lateral de posición
-    static SWAY_RATE   = 0.22;   // u/seg velocidad lateral pico
-    static TAIL_FREQ   = 18.85;  // rad/seg (~3 Hz)  coleo de cola
+    static SWIM_SPEED = 1.10;   // u/seg base (más lento que el lionfish)
+    static TURN_SPEED = 0.30;   // factor slerp × delta (mayor inercia)
+    static SWAY_FREQ  = 6.28;   // rad/seg (~1 Hz) oscilación lateral
+    static SWAY_RATE  = 0.28;   // u/seg velocidad lateral pico (cuerpo grande)
+    static BASE_SCALE = 0.65;   // escala base del modelo en el acuario
 
     constructor(renderer, physics, bridge) {
         super(renderer, physics, bridge);
@@ -79,12 +61,19 @@ export class Lionfish extends Medusa {
     // GEOMETRÍA
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Sobreescribe Medusa.createBellGeometry().
+     * Instancia SharkGeometry con el modelo GLB y lo agrega al transformationObject.
+     * Se pasa Medusa.uniforms.bassIntensity para que el mrtNode sea audio-reactivo.
+     */
     createBellGeometry() {
-        this.body = new LionfishGeometry();
-        this.body.createGeometry();
+        this.body = new SharkGeometry();
+        // bassIntensity ya está inicializado en Medusa.initStatic(), que se llama
+        // antes de crear el pool de tiburones en app.js.
+        this.body.createGeometry(Medusa.uniforms.bassIntensity);
         this.transformationObject.add(this.body.object);
-        // Escala global: legible en el escenario, proporcional a las medusas
-        this.transformationObject.scale.set(0.72, 0.72, 0.72);
+        // Escala global: el tiburón ocupa más espacio que el lionfish
+        this.transformationObject.scale.setScalar(Shark.BASE_SCALE);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -109,26 +98,27 @@ export class Lionfish extends Medusa {
             return;
         }
 
-        // Tiempo propio: ~1.0/seg real, con variación de ruido y charge
+        // Tiempo propio: ~1.0/seg real, con pequeña variación de ruido y charge
         this.time += delta * (1.0
-            + noise2D(this.noiseSeed, elapsed * 0.06) * 0.10
-            + this.charge * 0.25);
+            + noise2D(this.noiseSeed, elapsed * 0.04) * 0.08
+            + this.charge * 0.18);
 
-        // phase: requerido por el bridge Verlet (lee medusa.phase)
-        this.phase = ((this.time * 0.15) % 1.0) * Math.PI * 2;
+        // phase: requerido por el bridge Verlet (lee medusa.phase para la GPU)
+        this.phase = ((this.time * 0.10) % 1.0) * Math.PI * 2;
 
-        // Señal principal de nado: sin a ~3Hz
-        const tailWag = Math.sin(this.time * Lionfish.TAIL_FREQ);
+        // Leer bassIntensity del uniform compartido (actualizado por app.js cada frame)
+        const bassIntensity = Medusa.uniforms.bassIntensity?.value ?? 0;
 
-        // Animación visual (cola, aletas, cuerpo)
-        this.body.updateAnimation(this.time, tailWag);
+        // Animar el modelo GLB: ciclo de nado + audio reactivity
+        this.body.updateAnimation(delta, bassIntensity);
 
-        // Movimiento de posición/orientación en el mundo
+        // Movimiento de posición y orientación en el mundo
         this._swimPosition(delta);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // POSICIÓN — nado direccional con oscilación lateral
+    // Mismo patrón que Lionfish._swimPosition() con constantes de tiburón.
     // ─────────────────────────────────────────────────────────────────────────
 
     _swimPosition(delta) {
@@ -148,8 +138,8 @@ export class Lionfish extends Medusa {
 
         } else if (this.isScattering) {
             currentTarget = this.scatterTarget;
-            // Umbral de llegada más amplio que la medusa (pez grande)
-            if (this.transformationObject.position.distanceTo(this.scatterTarget) < 2.2) {
+            // Umbral de llegada más amplio: el tiburón es más grande que el lionfish
+            if (this.transformationObject.position.distanceTo(this.scatterTarget) < 2.8) {
                 this.isScattering = false;
             }
 
@@ -157,47 +147,44 @@ export class Lionfish extends Medusa {
             currentTarget = this.targetPosition;
         }
 
-        // ── 2. Vector dirección al target (reutiliza buffer) ─────────────────
+        // ── 2. Vector dirección al target (reutiliza buffers de módulo) ──────
         const pos = this.transformationObject.position;
         _dirVec.subVectors(currentTarget, pos);
         const distToTarget = _dirVec.length();
 
-        // ── 3. Orientación suave (slerp con inercia de pez grande) ───────────
-        if (distToTarget > 0.9) {
+        // ── 3. Orientación suave (slerp con inercia de animal grande) ────────
+        if (distToTarget > 1.0) {
             _dirVec.normalize();
-            // +Y local = dirección de avance (compatibilidad con Medusa)
+            // +Y local = dirección de avance (compatibilidad con Medusa y Lionfish)
             _targetQuat.setFromUnitVectors(_upVec, _dirVec);
-            // TURN_SPEED × delta: slerp correcto a 360 pasos/seg
             this.transformationObject.quaternion.slerp(
                 _targetQuat,
-                delta * Lionfish.TURN_SPEED
+                delta * Shark.TURN_SPEED
             );
         }
 
         // ── 4. Velocidad constante × delta ───────────────────────────────────
-        // El pez no pulsa — mantiene velocidad uniforme.
-        // Frenado suave al acercarse (evita sobrepasar el target en círculos).
-        const brakeFactor = Math.min(1.0, distToTarget / 2.5);
-        const speed = (Lionfish.SWIM_SPEED * brakeFactor + this.charge * 0.6) * delta;
+        // El tiburón mantiene velocidad uniforme (no pulsante como la medusa).
+        // Frenado suave al acercarse al target para evitar sobrepasar.
+        const brakeFactor = Math.min(1.0, distToTarget / 3.0);
+        const speed = (Shark.SWIM_SPEED * brakeFactor + this.charge * 0.50) * delta;
 
-        // Avance en la dirección local +Y del pez
+        // Avance en la dirección local +Y del tiburón
         _fwdVec.set(0, speed, 0).applyQuaternion(this.transformationObject.quaternion);
 
         // ── 5. Sway lateral × delta ───────────────────────────────────────────
-        // sway_velocity = SWAY_RATE × sin(time × SWAY_FREQ)
-        // Se añade perpendicularmente al avance → crea la "S" del nado.
-        // cross(up, forward) da el vector derecha del pez.
+        // Ondulación lateral característica del movimiento de tiburón.
+        // cross(up, forward) da el vector "derecha" del tiburón.
         _rightVec.crossVectors(_upVec, _fwdVec);
         if (_rightVec.lengthSq() > 1e-6) _rightVec.normalize();
 
-        const swayV = Math.sin(this.time * Lionfish.SWAY_FREQ)
-                    * Lionfish.SWAY_RATE * delta;
+        const swayV = Math.sin(this.time * Shark.SWAY_FREQ) * Shark.SWAY_RATE * delta;
         _rightVec.multiplyScalar(swayV);
 
         // ── 6. Integrar posición ─────────────────────────────────────────────
         pos.add(_fwdVec).add(_rightVec);
 
-        // ── 7. Wrap vertical (igual que Medusa) ──────────────────────────────
+        // ── 7. Wrap vertical (igual que Medusa y Lionfish) ───────────────────
         if (pos.y > 20) {
             pos.set(
                 (Math.random() - 0.5) * 10,
@@ -214,8 +201,12 @@ export class Lionfish extends Medusa {
     // ESTÁTICOS
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Carga el modelo GLB una sola vez durante la inicialización de la app.
+     * Debe ser await-eado en app.js antes de crear el pool de tiburones.
+     */
     static async initStatic() {
-        LionfishGeometry.createMaterial();
+        await SharkGeometry.loadStatic();
     }
 
     static updateStatic() { }

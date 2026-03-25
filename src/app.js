@@ -11,6 +11,8 @@ import { VertexVisualizer } from "./physics/vertexVisualizer";
 import {SpringVisualizer} from "./physics/springVisualizer";
 import {Medusa} from "./medusa";
 import {Lionfish} from "./lionfish";
+// /CAMBIO/ Importar la nueva clase Shark
+import {Shark} from "./shark";
 import {AnimalFactory} from "./animalFactory";
 import {MedusaVerletBridge} from "./medusaVerletBridge";
 import {Background} from "./background";
@@ -33,8 +35,13 @@ class App {
 
     MAX_JELLYFISH = 22;
     MAX_LIONFISH = 8;
+    // /CAMBIO/ Pool de tiburones: capacidad máxima en el acuario
+    MAX_SHARKS = 4;
+
     medusaPool = [];
     lionfishPool = [];
+    // /CAMBIO/ Pool de tiburones
+    sharkPool = [];
 
     timeNearCursor = 0;
     SPAWN_THRESHOLD_SECONDS = 3.0;
@@ -57,8 +64,17 @@ class App {
         this.audioReactivity = new AudioReactivity();
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER: iterar sobre todos los pools de entidades
+    // /CAMBIO/ Centralizar la concatenación de pools para no olvidar ninguno
+    // cuando se itera. Al agregar un nuevo animal, basta con añadir su pool aquí.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    _getAllEntities() {
+        return this.medusaPool.concat(this.lionfishPool, this.sharkPool);
+    }
+
     async init(progressCallback) {
-        // ... (resto del init sin cambios)
         conf.init();
         this.info = new Info();
         this.renderer.init();
@@ -89,8 +105,13 @@ class App {
         await progressCallback(0.4);
         await Medusa.initStatic(this.physics);
         await Lionfish.initStatic();
+        // /CAMBIO/ Inicializar Shark: carga el GLB (async) antes de crear el pool.
+        // Debe ocurrir DESPUÉS de Medusa.initStatic() para que bassIntensity uniform
+        // esté disponible cuando se instancien los tiburones.
+        await Shark.initStatic();
         await progressCallback(0.5);
         this.bridge = new MedusaVerletBridge(this.physics);
+
         // Registrar PRIMERO todas las medusas para que sus IDs en el bridge
         // sean contiguos y el bake de vértices Verlet funcione correctamente.
         for (let i = 0; i < this.MAX_JELLYFISH; i++) {
@@ -99,6 +120,7 @@ class App {
             this.physics.addObject(medusa);
             this.medusaPool.push(medusa);
         }
+
         // Registrar lionfish DESPUÉS — 0 vértices Verlet, el bridge lo maneja.
         for (let i = 0; i < this.MAX_LIONFISH; i++) {
             const lf = new Lionfish(this.renderer, this.physics, this.bridge);
@@ -106,10 +128,22 @@ class App {
             this.physics.addObject(lf);
             this.lionfishPool.push(lf);
         }
+
+        // /CAMBIO/ Registrar tiburones DESPUÉS del lionfish — también 0 vértices Verlet.
+        // El bridge asigna count=0 y updateMedusaById hace early-return (no-op).
+        for (let i = 0; i < this.MAX_SHARKS; i++) {
+            const shark = new Shark(this.renderer, this.physics, this.bridge);
+            this.scene.add(shark.object);
+            this.physics.addObject(shark);
+            this.sharkPool.push(shark);
+        }
+
         this.physics.addObject(this.bridge);
         await progressCallback(0.6);
         await this.physics.bake();
         await progressCallback(0.7);
+
+        // Activar las 2 primeras medusas; el resto del acuario empieza vacío.
         this.medusaPool.forEach((medusa, index) => {
             if (index < 2) {
                 medusa.activate(new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, 0));
@@ -118,6 +152,9 @@ class App {
             }
         });
         this.lionfishPool.forEach(lf => lf.deactivate());
+        // /CAMBIO/ Desactivar todos los tiburones al inicio
+        this.sharkPool.forEach(shark => shark.deactivate());
+
         this.vertexVisualizer = new VertexVisualizer(this.physics);
         this.springVisualizer = new SpringVisualizer(this.physics);
         this.scene.add(this.springVisualizer.object);
@@ -161,14 +198,31 @@ class App {
 
         await progressCallback(1.0, 100);
     }
-    
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GESTIÓN DE ENTIDADES
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Activa la primera entidad inactiva del tipo indicado.
-     * @param {'jellyfish'|'lionfish'} type
+     * Activa la primera entidad inactiva del pool correspondiente al tipo dado.
+     * /CAMBIO/ Añadido soporte para el tipo 'shark'.
+     * Para agregar un nuevo animal en el futuro: añadir su case aquí.
+     *
+     * @param {string} type - 'jellyfish' | 'lionfish' | 'shark' | ...
      * @param {THREE.Vector3} spawnPosition
      */
     activateNextEntity(type, spawnPosition) {
-        const pool = type === 'lionfish' ? this.lionfishPool : this.medusaPool;
+        let pool;
+        if (type === 'lionfish') {
+            pool = this.lionfishPool;
+        } else if (type === 'shark') {
+            // /CAMBIO/ Pool de tiburones
+            pool = this.sharkPool;
+        } else {
+            // 'jellyfish' y cualquier tipo no reconocido usa el pool de medusas
+            pool = this.medusaPool;
+        }
+
         for (const entity of pool) {
             if (!entity.isActive) {
                 entity.activate(spawnPosition);
@@ -178,7 +232,8 @@ class App {
     }
 
     scatterAllActiveEntities() {
-        this.medusaPool.concat(this.lionfishPool).forEach(entity => {
+        // /CAMBIO/ Incluir tiburones en el scatter (usa _getAllEntities)
+        this._getAllEntities().forEach(entity => {
             if (entity.isActive) entity.scatter();
         });
     }
@@ -195,8 +250,10 @@ class App {
         // Comprobar si el cursor se ha movido de la última posición de spawn.
         if (!this.cursorHasMoved && this.mouseWorldPosition.distanceTo(this.lastSpawnPosition) > this.CURSOR_MOVE_THRESHOLD) {
             this.cursorHasMoved = true;
-            // Si se mueve, ordenar a todas las entidades que dejen de rodear y vuelvan a seguir.
-            this.medusaPool.concat(this.lionfishPool).forEach(entity => {
+            // Si se mueve, ordenar a todas las entidades (incluidos tiburones)
+            // que dejen de rodear y vuelvan a seguir al cursor.
+            // /CAMBIO/ Usa _getAllEntities() para incluir tiburones
+            this._getAllEntities().forEach(entity => {
                 if (entity.isActive) entity.stopCircling();
             });
         }
@@ -207,9 +264,10 @@ class App {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
     }
-    
+
     updateMouseInteractions() {
-        this.medusaPool.concat(this.lionfishPool).forEach(entity => {
+        // /CAMBIO/ Incluir tiburones en las interacciones con el cursor
+        this._getAllEntities().forEach(entity => {
             if (entity.isActive) {
                 entity.updatePointerInteraction(this.raycaster.ray);
                 entity.setTarget(this.mouseWorldPosition);
@@ -218,6 +276,8 @@ class App {
     }
 
     sortMedusae() {
+        // bridge.medusae incluye todas las entidades registradas (medusas, lionfish,
+        // tiburones), por lo que no es necesario cambiar este método.
         this.bridge.medusae.forEach(entity => {
             entity.distance = entity.isActive
                 ? this.camera.position.distanceTo(entity.transformationObject.position)
@@ -233,7 +293,6 @@ class App {
 
     async update(delta, elapsed) {
         conf.begin();
-        // ... (código de update sin cambios hasta la lógica de spawn)
         const { runSimulation, showVerletSprings } = conf;
         this.springVisualizer.object.visible = showVerletSprings;
         conf.update();
@@ -243,8 +302,10 @@ class App {
         this.lights.update(elapsed);
         this.updateMouseInteractions();
 
-        const activeEntities = this.medusaPool.concat(this.lionfishPool).filter(e => e.isActive);
-        const totalMax = this.MAX_JELLYFISH + this.MAX_LIONFISH;
+        // /CAMBIO/ activeEntities y totalMax ahora incluyen tiburones
+        const activeEntities = this._getAllEntities().filter(e => e.isActive);
+        const totalMax = this.MAX_JELLYFISH + this.MAX_LIONFISH + this.MAX_SHARKS;
+
         if (activeEntities.length > 0 && activeEntities.length < totalMax) {
             const averagePosition = new THREE.Vector3();
             activeEntities.forEach(e => averagePosition.add(e.transformationObject.position));
@@ -263,7 +324,7 @@ class App {
                     this.isSpawning = true;
                     this.timeNearCursor = 0;
 
-                    // AnimalFactory decide si la siguiente es medusa o lionfish.
+                    // AnimalFactory decide si la siguiente es medusa, lionfish o shark.
                     const nextType = AnimalFactory.getNextType();
                     this.activateNextEntity(nextType, averagePosition);
                     this.scatterAllActiveEntities();
@@ -274,6 +335,7 @@ class App {
                     setTimeout(() => { this.isSpawning = false; }, 1000);
                 } else {
                     // --- CASO 2: El cursor NO se ha movido -> Iniciar circling.
+                    // /CAMBIO/ activeEntities ya incluye tiburones
                     activeEntities.forEach(e => e.startCircling(this.lastSpawnPosition));
                 }
             }
@@ -285,7 +347,8 @@ class App {
         this.sortMedusae();
 
         // [AUDIO REACTIVITY] Actualizar el análisis de bass y propagar la
-        // intensidad al uniform TSL compartido por todos los materiales de medusa.
+        // intensidad al uniform TSL compartido por todos los materiales.
+        // /CAMBIO/ Los materiales del tiburón también leen este uniform via mrtNode.
         this.audioReactivity.update();
         Medusa.uniforms.bassIntensity.value = this.audioReactivity.bassIntensity;
 
