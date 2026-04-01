@@ -24,7 +24,7 @@ export class Cryptosuchus extends Medusa {
     static TURN_SPEED = 0.12;   // factor slerp × delta — inercia máxima
     static SWAY_FREQ  = 3.14;   // rad/seg (~0.5 Hz) — ondulación muy lenta
     static SWAY_RATE  = 0.40;   // u/seg — amplitud lateral grande
-    static BASE_SCALE = 6.0;    // escala base — el más grande del acuario
+    static BASE_SCALE = 12.0;    // escala base — el más grande del acuario
 
     constructor(renderer, physics, bridge) {
         super(renderer, physics, bridge);
