@@ -38,6 +38,7 @@ class Conf {
         //settings.addBinding(this, "iridescence", { min: 0.01, max: 1.0, step: 0.01 });
         //settings.addBinding(this, "iridescenceIOR", { min: 1.00, max: 2.33, step: 0.01 });
 
+        gui.element.style.display = 'none';
         this.gui = gui;
     }
 

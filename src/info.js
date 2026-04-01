@@ -10,6 +10,7 @@ export class Info {
         container.style.bottom = '8px';
         container.style.maxWidth = '512px';
         container.style.width = 'calc(100% - 16px)';
+        container.style.display = 'none';
 
         const pane = new Pane({ container })
         pane.registerPlugin(InfodumpPlugin);

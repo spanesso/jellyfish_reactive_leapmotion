@@ -25,21 +25,55 @@
  */
 export class AnimalFactory {
 
-    // /CAMBIO/ Reemplaza el contador JELLYFISH_PER_CYCLE por una secuencia
-    // extensible. Para añadir un nuevo animal, simplemente insertar su type
-    // en el array en la posición deseada.
+    // Número de medusas entre cada animal especial.
+    // Cambiar este valor para ajustar la frecuencia de aparición de animales.
+    static JELLYFISH_PER_ANIMAL = 1;
+
+    // Número de tiburones que deben aparecer antes de que aparezca el arctic_ray.
+    static SHARKS_PER_WHALE = 1;
+
+    // Número de arctic_rays entre cada jefe de nivel 3.
+    static WHALES_PER_BOSS = 1;
+
+    // Secuencia construida dinámicamente con jerarquía de 3 niveles:
     //
-    // Patrón actual: 3 medusas → 1 lionfish → 3 medusas → 1 tiburón → (ciclo)
-    static sequence = [
-        'jellyfish', 'jellyfish', 'jellyfish', 'lionfish',
-        'jellyfish', 'jellyfish', 'jellyfish', 'shark',
-    ];
+    // Nivel 1 — ciclo de tiburón (× SHARKS_PER_WHALE → arctic_ray):
+    //   N medusas → alien_fish → N medusas → shark
+    //   N medusas → discus     → N medusas → shark
+    //   arctic_ray
+    //
+    // Nivel 2 — ciclo de arctic_ray (× WHALES_PER_BOSS → jefe):
+    //   [ciclo de tiburón] × WHALES_PER_BOSS → cryptosuchus
+    //   [ciclo de tiburón] × WHALES_PER_BOSS → shadow_leviathan
+    //   (reinicio)
+    static sequence = (() => {
+        const jf       = new Array(AnimalFactory.JELLYFISH_PER_ANIMAL).fill('jellyfish');
+        const specials = ['alien_fish', 'discus'];
+        const bosses   = ['cryptosuchus', 'shadow_leviathan'];
+
+        // Un ciclo completo que termina en arctic_ray
+        const whaleCycle = [];
+        for (let i = 0; i < AnimalFactory.SHARKS_PER_WHALE; i++) {
+            whaleCycle.push(...jf, specials[i % specials.length], ...jf, 'shark');
+        }
+        whaleCycle.push('whale');
+
+        // Por cada jefe: WHALES_PER_BOSS ciclos de arctic_ray → jefe
+        const seq = [];
+        for (let b = 0; b < bosses.length; b++) {
+            for (let w = 0; w < AnimalFactory.WHALES_PER_BOSS; w++) {
+                seq.push(...whaleCycle);
+            }
+            seq.push(bosses[b]);
+        }
+        return seq;
+    })();
 
     static _currentIndex = 0;
 
     /**
      * Retorna el tipo de la próxima entidad a crear y avanza el índice interno.
-     * @returns {string} tipo de animal (e.g. 'jellyfish' | 'lionfish' | 'shark')
+     * @returns {string} tipo de animal (e.g. 'jellyfish' | 'alien_fish' | 'shark')
      */
     static getNextType() {
         const type = AnimalFactory.sequence[AnimalFactory._currentIndex];
