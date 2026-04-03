@@ -24,11 +24,11 @@ export class GlowWhale extends Medusa {
     type = 'whale';
 
     // ── Constantes de movimiento ─────────────────────────────────────────────
-    static SWIM_SPEED = 0.80;   // u/seg — lenta y majestuosa
-    static TURN_SPEED = 0.18;   // factor slerp × delta — gran inercia por tamaño
-    static SWAY_FREQ  = 4.71;   // rad/seg (~0.75 Hz) — ondulación muy lenta
-    static SWAY_RATE  = 0.35;   // u/seg — amplitud lateral grande (cuerpo enorme)
-    static BASE_SCALE = 12.5;    // escala base — notablemente más grande que el resto
+    static SWIM_SPEED = 0.50;   // u/seg — lenta y majestuosa
+    static TURN_SPEED = 0.22;   // factor slerp × delta — gran inercia por tamaño
+    static SWAY_FREQ  = 4.51;   // rad/seg (~0.75 Hz) — ondulación muy lenta
+    static SWAY_RATE  = 0.30;   // u/seg — amplitud lateral grande (cuerpo enorme)
+    static BASE_SCALE = 15.5;    // escala base — notablemente más grande que el resto
 
     constructor(renderer, physics, bridge) {
         super(renderer, physics, bridge);

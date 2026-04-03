@@ -24,7 +24,7 @@ export class ShadowLeviathan extends Medusa {
     static TURN_SPEED = 0.10;   // factor slerp × delta — inercia máxima
     static SWAY_FREQ  = 2.51;   // rad/seg (~0.4 Hz) — ondulación muy lenta
     static SWAY_RATE  = 0.45;   // u/seg — amplitud lateral enorme
-    static BASE_SCALE = 39.0;   // escala base — 6× el tamaño original
+    static BASE_SCALE = 59.0;   // escala base — 6× el tamaño original
 
     constructor(renderer, physics, bridge) {
         super(renderer, physics, bridge);

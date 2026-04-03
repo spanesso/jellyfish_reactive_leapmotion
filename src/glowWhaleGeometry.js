@@ -2,7 +2,7 @@ import * as THREE from "three/webgpu";
 import { Fn, vec4, float, mrt } from "three/tsl";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
-import glowWhaleModelUrl from "./animals_3d/arctic_ray.glb?url";
+import glowWhaleModelUrl from "./animals_3d/skull-whale.glb?url";
 
 /**
  * GlowWhaleGeometry
@@ -39,14 +39,14 @@ export class GlowWhaleGeometry {
                 (gltf) => {
                     GlowWhaleGeometry._gltfData = gltf;
                     console.log(
-                        `[GlowWhaleGeometry] Modelo cargado (arctic_ray.glb). ` +
+                        `[GlowWhaleGeometry] Modelo cargado (skull-whale.glb). ` +
                         `Animaciones: ${gltf.animations.length}`
                     );
                     resolve(gltf);
                 },
                 undefined,
                 (err) => {
-                    console.error('[GlowWhaleGeometry] Error al cargar arctic_ray.glb:', err);
+                    console.error('[GlowWhaleGeometry] Error al cargar skull-whale.glb:', err);
                     reject(err);
                 }
             );

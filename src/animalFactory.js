@@ -25,15 +25,13 @@
  */
 export class AnimalFactory {
 
-    // Número de medusas entre cada animal especial.
-    // Cambiar este valor para ajustar la frecuencia de aparición de animales.
-    static JELLYFISH_PER_ANIMAL = 1;
+    static JELLYFISH_PER_ANIMAL = 10;
+    static SHARKS_PER_WHALE = 5;
+    static WHALES_PER_BOSS = 3;
 
-    // Número de tiburones que deben aparecer antes de que aparezca el arctic_ray.
-    static SHARKS_PER_WHALE = 1;
-
-    // Número de arctic_rays entre cada jefe de nivel 3.
-    static WHALES_PER_BOSS = 1;
+    //static JELLYFISH_PER_ANIMAL = 1;
+    //static SHARKS_PER_WHALE = 1;
+   // static WHALES_PER_BOSS = 1;
 
     // Secuencia construida dinámicamente con jerarquía de 3 niveles:
     //
